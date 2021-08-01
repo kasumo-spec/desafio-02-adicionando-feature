@@ -1,4 +1,9 @@
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { GetStaticProps } from 'next';
+import { format } from 'date-fns';
+import ptBR from 'date-fns/locale/pt-BR';
+import { FiCalendar, FiUser } from 'react-icons/fi';
 
 import { getPrismicClient } from '../services/prismic';
 
@@ -24,13 +29,83 @@ interface HomeProps {
   postsPagination: PostPagination;
 }
 
-// export default function Home() {
-//   // TODO
-// }
+const Home = ({ postsPagination }: HomeProps): JSX.Element => {
+  const [posts, setPosts] = useState<Post[]>([]);
 
-// export const getStaticProps = async () => {
-//   // const prismic = getPrismicClient();
-//   // const postsResponse = await prismic.query(TODO);
+  useEffect(() => {
+    setPosts(postsPagination.results);
+  }, [postsPagination.results]);
 
-//   // TODO
-// };
+  async function handleLoadPages(): Promise<void> {
+    if (postsPagination.next_page !== null) {
+      const { results } = await (await fetch(postsPagination.next_page)).json();
+      results.map((post: Post): void => {
+        postsPagination.next_page = null;
+        setPosts(oldPageState => [...oldPageState, post]);
+        return null;
+      });
+    }
+  }
+
+  return (
+    <main className={commonStyles.coontainer}>
+      <div className={commonStyles.content}>
+        <img className={styles.logo} src="/logo.svg" alt="logo" />
+        <ul>
+          {posts.map(post => {
+            const date = format(
+              new Date(post.first_publication_date),
+              'dd MMM yyyy',
+              { locale: ptBR }
+            );
+
+            return (
+              <li key={post.uid} className={styles.card}>
+                <Link href={`/post/${post.uid}`}>
+                  <a>{post.data.title}</a>
+                </Link>
+
+                <p>{post.data.subtitle}</p>
+                <div>
+                  <span>
+                    <FiCalendar size="20px" color="#bbb" />
+                    <p>{date}</p>
+                  </span>
+                  <span>
+                    <FiUser size="20px" color="#bbb" />
+                    <p>{post.data.author}</p>
+                  </span>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+        {postsPagination.next_page !== null ? (
+          <button type="button" onClick={handleLoadPages}>
+            <p>Carregar mais posts</p>
+          </button>
+        ) : null}
+      </div>
+    </main>
+  );
+};
+
+export default Home;
+
+export const getStaticProps: GetStaticProps = async () => {
+  const prismic = getPrismicClient();
+  const postsResponse = await prismic.query('', {
+    pageSize: 1,
+  });
+
+  const { next_page, results } = postsResponse;
+
+  return {
+    props: {
+      postsPagination: {
+        next_page,
+        results,
+      },
+    },
+  };
+};
